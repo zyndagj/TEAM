@@ -50,6 +50,8 @@ class MethIndex:
 		minCov	- Minimum coverage needed (Default: 5)
 		maxCov	- Maximum coverage allowed (Default: 200)
 		"""
+		#think about
+		# http://stackoverflow.com/questions/8461798/how-can-i-struct-unpack-many-numbers-at-once
 		if chrom not in self.seekDict:
 			print 'Not a real chromosome'
 			return []
@@ -63,15 +65,13 @@ class MethIndex:
 			else:
 				countEnd = end
 		else:
-			seekStart = self.seekDict[chrom] + (start - 1) * 5
+			seekStart = self.seekDict[chrom] + (start - 1) * 6
 			if end == -1:
 				countEnd = self.chromDict[chrom]-start+1
 			else:
 				countEnd = min(end-start+1,self.chromDict[chrom]-start+1)
-		outMeth = []
-		outContext = []
-		cFetch(self.methBin, seekStart, countEnd, minCov, maxCov, outMeth, outContext)
-		return out
+		# returns (outMeth, outContext)
+		return cFetch(self.methBin, seekStart, countEnd, minCov, maxCov)
 
 	def readFAI(self):
 		"""
@@ -177,16 +177,16 @@ class MethIndex:
 
 	def writeBlank(self, F):
 		"""
-		Writes two blank values (65535) and one 255 to .bin file.
+		Writes two blank values (65535) and one 0 to .bin file.
 		65535 is the largest USHORT.
 		"""
-		F.write('\xff\xff\xff\xff\xff')
+		F.write('\xff\xff\xff\xff\x00\x00')
 
 	def writeData(self, F, C, CorT, contextNum):
 		"""
-		Writes two unsigned shorts to .bin file.
+		Writes three unsigned shorts to .bin file.
 		"""
-		F.write(struct.pack('HHB', C, CorT, contextNum))
+		F.write(struct.pack('HHH', C, CorT, contextNum))
 
 	def makeBinIndex(self, chromOrder):
 		"""
@@ -200,7 +200,7 @@ class MethIndex:
 			OBI.write(chrom + '\t')
 			OBI.write(str(location) + '\n')
 			self.seekDict[chrom] = location
-			location = location + size * 5
+			location = location + size * 6
 		OBI.close()
 
 	def readBinIndex(self):
