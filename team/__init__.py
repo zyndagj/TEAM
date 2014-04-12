@@ -71,20 +71,19 @@ class methExperiment:
 
 	def plotData(self, dataDict):
 		for sampleName in self.samples:
-			fig, axes = plt.subplots(3,1,sharex=True,figsize=(10,7))
-			count = 0
-			for methType in methTypes:
+			fig = plt.figure(figsize=(11,7))
+			count = 1
+			for methType in ("CG","CHH","CHG"):
 				dataList = []
 				names = []
 				for gff in self.gff:
-			#plt.subplots_adjust(left=0.78/figWidth,right=1-(.13/figWidth),hspace=.2,bottom=0.01,top=0.95)
 					dataList.append(dataDict[gff][sampleName][methType])
 					names.append(self.gff[gff])
-				makeBoxplot(axes[count], dataList, methType, names)
+				makeBoxplot("31"+str(count), dataList, methType, names, fig)
 				count += 1
 			plt.xticks(range(len(names)+1)[1:],names)
-			fig.subplots_adjust(hspace=0.1, top=0.95, bottom=0.05, left=0.07, right=0.96)
-			fig.suptitle("Methylation Probabilities by Region")
+			plt.subplots_adjust(hspace=0.1, top=0.95, bottom=0.05, left=0.07, right=0.96)
+			plt.suptitle("Methylation Probabilities by Region")
 			plt.savefig(sampleName+"_probabilities.eps")
 			plt.savefig(sampleName+"_probabilities.svg")
 
@@ -141,14 +140,14 @@ def geneBin(geneStruct, FA, methReps):
 		rNot1 = methNA != -1
 		for methIndex in range(1,len(methTypes)+1): #1-indexed
 			for i in range(0,4,3): #handle both strands
-				methUse = contA == methIndex+i
+				methUse = contNA == methIndex+i
 				locUse = np.logical_and(rNot1, methUse)
-				C[methIndex, locUse] += 1
-				Y[methIndex, locUse] += methNA[locUse]
+				C[methIndex-1, locUse] += 1
+				Y[methIndex-1, locUse] += methNA[locUse]
 	outBins = []
 	for i in range(3):
 		cgt1 = C[i,:] > 1
-		Y[i,cgt1] = Y[i,cgt1]/C[cgt1] #average across replicates
+		Y[i,cgt1] = Y[i,cgt1]/C[i,cgt1] #average across replicates
 		outBins.append(meanFunc(Y[i,:],C[i,:]))
 	return outBins #(CG, CHG, CHH)
 
@@ -174,9 +173,13 @@ def gff_gen(inFile, minSize):
 			yield (chrom, strand, start, end, idNum)
 	IF.close()
 
-def makeBoxplot(ax, dataList, methType, names):
+def makeBoxplot(sp, dataList, methType, names, fig):
+	ax = fig.add_subplot(int(sp))
 	ax.boxplot(dataList, sym='')
 	ax.set_ylabel(methType)
+	if sp != "313":
+		plt.setp(ax.get_xticklabels(), visible=False)
+		plt.setp(ax.get_xticklines(), visible=False)
 
 if __name__ == "__main__":
 	main()
