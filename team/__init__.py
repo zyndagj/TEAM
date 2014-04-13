@@ -8,6 +8,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from pymethyl import MethIndex
+import cPickle
 
 #H Dictionaries
 hD = {'A':'H', 'T':'H', 'C':'H', 'G':'G', 'N':'N', 'R':'N', 'Y':'N', 'K':'N', 'M':'N', 'S':'N', 'W':'N', 'B':'N', 'D':'N', 'H':'N', 'V':'N', 'X':'N'}
@@ -20,7 +21,7 @@ class methExperiment:
 		self.samples = {}
 		self.gff = {}
 		self.fa = "Unset"
-		self.gffRanges = {}
+		self.probs = {}
 	def addSample(self, name, samples = []):
 		self.samples[name] = []
 		print "Added sample: %s" % (name)
@@ -29,7 +30,7 @@ class methExperiment:
 		if not checkFiles([replicate]):
 			self.samples[name].append(replicate)
 			print "Added %s to %s" % (replicate, name)
-	def setGFF(self, name, gffFile):
+	def addGFF(self, name, gffFile):
 		#psedudogene,chromosome,gene,transposable_element,rest is NC
 		if not checkFiles([gffFile]):
 			if gffFile not in self.gff:
@@ -48,28 +49,29 @@ class methExperiment:
 			for i in range(numReps-1):
 				print "  |- %s" % (self.samples[sample][i])
 			print "   - %s" % (self.samples[sample][numReps-1])
-
-	def makeMethBins(self, gffFile):
+	def makeMethBins(self):
+		self.dataDict = {}
 		minRegionLen = 700
-		self.binData = {}
 		for sampleName in self.samples:
-			self.binData[sampleName] = {}
+			self.dataDict[sampleName] = {}
 			methIndexes = []
 			for mf in self.samples[sampleName]:
 				methIndexes.append(MethIndex(mf,self.fa))
-			for methType in methTypes:
+			for gffFile in self.gff:
+				self.dataDict[sampleName][gffFile] = {}
+				for methType in methTypes:
+					self.dataDict[sampleName][gffFile][methType] = []
 				count = 0
-				self.binData[sampleName][methType] = []
-			for struct in gff_gen(gffFile, minRegionLen):
-				count += 1
-				npMeanBins = geneBin(struct, self.FA, methIndexes)
-				for i in range(3):
-					methType = methTypes[i]
-					if np.isfinite(npMeanBins[i]):
-						self.binData[sampleName][methType].append(npMeanBins[i])
-			print "%s: %i" % (gffFile,count)
+				for struct in gff_gen(gffFile, minRegionLen):
+					count += 1
+					methylBins = geneBin(struct, self.FA, methIndexes)
+					for i in range(3):
+						methType = methTypes[i]
+						if np.isfinite(methylBins[i]):
+							self.dataDict[sampleName][gffFile][methType].append(methylBins[i])
+				print "%s: %i" % (gffFile,count)
 
-	def plotData(self, dataDict):
+	def plotData(self):
 		for sampleName in self.samples:
 			fig = plt.figure(figsize=(11,7))
 			count = 1
@@ -77,7 +79,7 @@ class methExperiment:
 				dataList = []
 				names = []
 				for gff in self.gff:
-					dataList.append(dataDict[gff][sampleName][methType])
+					dataList.append(self.dataDict[sampleName][gff][methType])
 					names.append(self.gff[gff])
 				makeBoxplot("31"+str(count), dataList, methType, names, fig)
 				count += 1
@@ -87,31 +89,31 @@ class methExperiment:
 			plt.savefig(sampleName+"_probabilities.eps")
 			plt.savefig(sampleName+"_probabilities.svg")
 
-	def printProb(self):
-		outProbs = makeProbs()
-		outLen = [0,0,0]
-		inProbs = makeProbs()
-		inLen = [0,0,0]
+	def printProbs(self):
 		for sampleName in self.samples:
-			print ", ".join(methTypes)
-			for methIndex in range(len(methTypes)):
-				methType = methTypes[methIndex]
-				Data = self.binData[sampleName][methType]
-				outLen[methIndex] += len(Data)
-				# edges are half open [0, 1)
-				hist, edges = np.histogram(Data, bins=10, range=(0,1))
-				print (list(hist), sum(hist))
-		print edges
+			self.probs[sampleName] = {}
+			for gff in self.gff:
+				self.probs[sampleName][gff] = {}
+				print gff
+				for methType in methTypes:
+					Data = self.dataDict[sampleName][gff][methType]
+					# edges are half open [0, 1)
+					hist, edges = np.histogram(Data, bins=10, range=(0,1))
+					self.probs[sampleName][gff][methType] = hist
+					string = "%s:\t" % (methType)
+					for i in hist:
+						string += "%d\t" % (i)
+					string += "sum: %d" % (sum(hist))
+					print string
+			print edges
 
-def makeProbs():
-	out = []
-	for i in range(3):
-		tmp = []
-		for k in range(10):
-			tmp.append(0)
-		out.append(tmp)
-	return out
-
+	def writeProbs(self):
+		for sampleName in self.samples:
+			cPickle.dump(self.probs, open(sampleName+"_probs.pickle",'wb'))
+	def readProbs(self):
+		for sampleName in self.samples:
+			cPickle.load(open(sampleName+"_probs.pickle",'rb'))
+		
 def checkFiles(fileList):
 	if not fileList: return 0
 	ret = 0
@@ -120,13 +122,6 @@ def checkFiles(fileList):
 			ret = 1
 			print "Could not find: %s" % (f)
 	return ret
-
-def printGene(geneStruct, npMeanBins, methType):
-	outStr = ""
-	outStr += geneStruct[4]+'\t'+methType+'\t'
-	outStr += '\t'.join(map(str,geneStruct[:-1]))+'\t'
-	outStr += '\t'.join(map(str,npMeanBins))
-	print outStr
 
 def geneBin(geneStruct, FA, methReps):
 	gChr, gStrand, gStart, gEnd, gID = geneStruct
