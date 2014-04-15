@@ -22,6 +22,7 @@ class methExperiment:
 		self.gff = {}
 		self.fa = "Unset"
 		self.probs = {}
+		self.windowSize = 500.0
 	def addSample(self, name, samples = []):
 		self.samples[name] = []
 		print "Added sample: %s" % (name)
@@ -111,8 +112,92 @@ class methExperiment:
 		for sampleName in self.samples:
 			cPickle.dump(self.probs, open(sampleName+"_probs.pickle",'wb'))
 	def readProbs(self):
+		# loads self.probs[sampleName][gff][methType] array of 10 hist values.
 		for sampleName in self.samples:
 			cPickle.load(open(sampleName+"_probs.pickle",'rb'))
+	def makeGffStats(self):
+		gffStats = {}
+		for gff in self.gff:
+			gffStats[gff] = simpleStats(gff)
+
+def main():
+	print "Window size: %i" % (int(windowSize))
+	chromDict = getChromSizes("TAIR10_chrom.gff")
+	GFFs = ("TAIR10_te_gene.gff","TAIR10_genes.gff","TAIR10_pseudogene.gff","TAIR10_te.gff")
+	gffStats = {}
+	for gff in GFFs:
+		stats = simpleStats(gff)
+		gffStats[gff] = stats
+	plt.show()
+	genomeBases = sum(chromDict.values())
+	simpleAnalyze(genomeBases, gffStats)
+
+def getChromSizes(inFile):
+	chromDict = {}
+	for line in open(inFile,'r'):
+		#Chr1	TAIR10	chromosome	1	30427671
+		tmp = line.split('\t')
+		name = tmp[0]
+		size = int(tmp[4])
+		chromDict[name] = size
+	return chromDict
+
+def simpleStats(inFile):
+	print inFile
+	count = 0
+	total = 0
+	for line in open(inFile,'r'):
+		#Chr1	TAIR10	transposable_element	11897	11976
+		count += 1
+		tmp = line.split('\t')
+		start = int(tmp[3])
+		end = int(tmp[4])
+		total += end-start+1
+	print "\tOccurrences: %d" % (count)
+	print "\tAverage Size: %.1f" % (total/float(count))
+	return (count, total/float(count))
+
+def simpleAnalyze(genomeBases, gffStats):
+	letters = {"TAIR10_te_gene.gff":"TG","TAIR10_genes.gff":"G","TAIR10_pseudogene.gff":"PG","TAIR10_te.gff":"TE","NC":"NC"}
+	letterIndex = ("NC","G","TG","TE","PG")
+	matrix = [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]
+	transition = ("TAIR10_genes.gff","TAIR10_te.gff")
+	basesNC = genomeBases-np.sum(map(lambda x: x[0]*x[1], gffStats.values()))
+	windowsNC = basesNC/windowSize
+	regionCounts = sum(map(lambda x: x[0], gffStats.values()))
+	matrix[0][0] = windowsNC/float(windowsNC+regionCounts)
+	te2gene = 4178.0/31189.0
+	gene2te = 4178.0/28775.0
+	for gff,v in gffStats.iteritems():
+		print gff
+		curLetter = letters[gff]
+		curIndex = letterIndex.index(curLetter)
+		count, avg = v
+		windowsPerRegion = avg/windowSize
+		toRegion = count/float(windowsNC+regionCounts)
+		matrix[0][curIndex] = toRegion
+		if curLetter == "G":
+			stayProb = 1.0/windowsPerRegion
+			matrix[1][1] = stayProb
+			matrix[1][3] = gene2te
+			leaveProb = 1-(gene2te+stayProb)
+			matrix[1][0] = leaveProb
+		elif curLetter == "TE":
+			stayProb = 1.0/windowsPerRegion
+			matrix[3][3] = stayProb
+			matrix[3][1] = te2gene
+			leaveProb = 1-(te2gene+stayProb)
+			matrix[3][0] = leaveProb
+		else:
+			stayProb = 1.0/windowsPerRegion
+			leaveProb = (1.0-stayProb)
+			matrix[curIndex][0] = leaveProb
+			matrix[curIndex][curIndex] = stayProb
+	print map(sum, matrix)
+	print "\t"+'\t'.join(letterIndex)
+	for i in range(len(letterIndex)):
+		print letterIndex[i]+'\t'+'\t'.join(map(lambda x: str(round(x,2)), matrix[i]))
+	print matrix
 		
 def checkFiles(fileList):
 	if not fileList: return 0

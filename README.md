@@ -1,7 +1,14 @@
-PyMethyl
-==========
+TEAM: TE Annotation from Methylation
+====================================
 
-This will parse [MethylCoder](https://github.com/brentp/methylcode) output and make a binary index for quick random access to methylation ratios based on position.
+Transposable elements (TEs) are DNA sequences that can "jump" and replicate throughout their host genome. Because their repetitive and prolific presence increases the difficulty of genome assembly, sequence alignment, and genome annotation, new algorithms are continuously developed. The detection and classification of transposable elements is crucial since they comprise significant portions of eukaryotic genomes and may induce large-scale genome rearrangement. Currently, transposable elements are identified through homology search or de novo repeat discovery. Homology searching relies on previously characterized transposon families and is not appropriate for new genomes. While de novo repeat discovery methods can detect highly repeated novel transposable elements, they may report non-TE repeats, such as tandem repeats, segmental duplications, and satellites. There are also low copy number transposons that are kept silent through DNA methylation, which are difficult to detect through existing methods. To improve the detection of low copy number transposable elements, I propose TEAM, which detects TEs in a reference genome based on its methylation signature. TEAM scans the frequencies of each methylation motif (CG, CHH, and CHG) in a sliding window across the whole genome and detects the unique methylation profiles of TEs, pseudogenes, and protein-coding genes using a hidden markov model. Not only is TEAM more sensitive than existing algorithms, but it also demands less memory and processing time.
+
+Dependencies
+------------
+
+- NumPy
+- Matplotlib
+- Python C Headers
 
 Installation
 ------------
@@ -16,67 +23,33 @@ or, for local installations
 python setup.py install --user
 ```
 
-Documentation
+Example
 -------------
 
-### Class - MethIndex
-Creates and queries methylation index for quick random access.
- 
-Methods defined here:
- 
-#### __init__(self, methFile, faFile)
-MethIndex constructor
-
-*Arguments*
-* methFile - Methylation input file from MethylCoder
-* faFile - Fasta file of reference (index required)
-
-#### fetch(self, chrom, start=-1, end=-1)
-Fetches a region of methylation ratios.
-
-If no start is given, 1-end is returned. If no end is given, start- is returned.
-
-*Arguments*
-* chrom - Chromosome
-* start - Start of region (1-indexed)
-* end - End of region (1-indexed)
-
-#### fillChrom(self, curChrom, curPos, F)
-Writes data for the rest of the chromosome from the current position. This should not be called by the user.
-
-#### makeBinIndex(self, chromOrder)
-Makes the bin index based on the order the chromosomes were written.
-
-#### makeIndex(self)
-Makes the .bin and .bin.idx methylation index files.
-
-#### readBinIndex(self)
-Loads the bin index into a seek dictionary.
-
-#### readFAI(self)
-Reads the sizes of each chromosome from the FASTA index.
-
-#### writeBlank(self, F)
-Writes to blank values (65535) to .bin file. 65535 is used because it is the largest USHORT 
-and read depth will probably never reach that.
-
-#### writeData(self, F, C, CorT)
-Writes two unsigned shorts to .bin file.
-
-## Usage
-
-After installing, change to the example directory and try running example.py.
 ```python
-from pymethyl import MethIndex
+from team import methExperiment
+import sys
 
-MI = MethIndex("test_meth.txt","test.fa")
-
-print MI.fetch("Chr1",start=1,end=10)
-print MI.fetch("Chr1",end=10)
-
-print MI.fetch("Chr2",start=11,end=20) #20 bases long
-print MI.fetch("Chr2",start=11)
-
-print MI.fetch("Chr1",start=1,end=20) #Whole Chromosome
-print MI.fetch("Chr1")
+testExp = methExperiment()
+testExp.addSample("30-109",["30-109_1_methratio.txt","30-109_2_methratio.txt"])
+testExp.addGFF("NC","region_gffs/TAIR10_NC.gff")
+testExp.addGFF("TE genes","region_gffs/TAIR10_te_gene.gff")
+testExp.addGFF("Genes","region_gffs/TAIR10_genes.gff")
+testExp.addGFF("Pseudogenes","region_gffs/TAIR10_pseudogene.gff")
+testExp.addGFF("TEs","region_gffs/TAIR10_te.gff")
+testExp.setReference("TAIR10.fa")
+testExp.printExperiment()
+##############################
+# Make emission probabilities
+##############################
+testExp.makeMethBins()
+testExp.printProbs()
+testExp.plotData()
+testExp.writeProbs()
+##############################
+# Load emission probabilities
+##############################
+#testExp.readProbs()
+sys.exit()
 ```
+A more detailed example with test data will be released soon.
