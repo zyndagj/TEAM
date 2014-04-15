@@ -117,28 +117,17 @@ class methExperiment:
 			cPickle.load(open(sampleName+"_probs.pickle",'rb'))
 	def makeGffStats(self):
 		gffStats = {}
-		for gff in self.gff:
-			gffStats[gff] = simpleStats(gff)
+		for gffFile in self.gff:
+			if self.gff[gffFile] != "NC":
+				gffStats[gffFile] = simpleStats(gffFile)
+		transMatrix = simpleAnalyze(gffStats, self.gff, self.fa+'.fai', self.windowSize)
 
-def main():
-	print "Window size: %i" % (int(windowSize))
-	chromDict = getChromSizes("TAIR10_chrom.gff")
-	GFFs = ("TAIR10_te_gene.gff","TAIR10_genes.gff","TAIR10_pseudogene.gff","TAIR10_te.gff")
-	gffStats = {}
-	for gff in GFFs:
-		stats = simpleStats(gff)
-		gffStats[gff] = stats
-	plt.show()
-	genomeBases = sum(chromDict.values())
-	simpleAnalyze(genomeBases, gffStats)
-
-def getChromSizes(inFile):
+def getChromSizes(inFai):
 	chromDict = {}
-	for line in open(inFile,'r'):
-		#Chr1	TAIR10	chromosome	1	30427671
+	for line in open(inFai,'r'):
 		tmp = line.split('\t')
 		name = tmp[0]
-		size = int(tmp[4])
+		size = int(tmp[1])
 		chromDict[name] = size
 	return chromDict
 
@@ -157,47 +146,57 @@ def simpleStats(inFile):
 	print "\tAverage Size: %.1f" % (total/float(count))
 	return (count, total/float(count))
 
-def simpleAnalyze(genomeBases, gffStats):
-	letters = {"TAIR10_te_gene.gff":"TG","TAIR10_genes.gff":"G","TAIR10_pseudogene.gff":"PG","TAIR10_te.gff":"TE","NC":"NC"}
-	letterIndex = ("NC","G","TG","TE","PG")
-	matrix = [[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0],[0,0,0,0,0]]
-	transition = ("TAIR10_genes.gff","TAIR10_te.gff")
+def calcNC(genomeBases, gffStats, gff):
+	total = genomeBases
+	for gffFile in gff:
+			total -= gffStats[gffFile][0]*gffStats[gffFile][1]
+	return total
+
+def simpleAnalyze(gffStats, gff, inFai, windowSize):
+	chromDict = getChromSizes(inFai)
+	genomeBases = sum(chromDict.values())
+	#self.gff[gffFile] = name
+	#NC	TG	G	PG	TE
+	letterIndex = gff.values()
+	NC = letterIndex.index("NC")
+	G = letterIndex.index("G")
+	TE = letterIndex.index("TE")
+	transMatrix = np.zeros((5,5))
 	basesNC = genomeBases-np.sum(map(lambda x: x[0]*x[1], gffStats.values()))
 	windowsNC = basesNC/windowSize
 	regionCounts = sum(map(lambda x: x[0], gffStats.values()))
-	matrix[0][0] = windowsNC/float(windowsNC+regionCounts)
-	te2gene = 4178.0/31189.0
-	gene2te = 4178.0/28775.0
-	for gff,v in gffStats.iteritems():
-		print gff
-		curLetter = letters[gff]
+	transMatrix[NC][NC] = windowsNC/float(windowsNC+regionCounts)
+	te2gene = 4178.0/31189.0 #make this dynamic
+	gene2te = 4178.0/28775.0 #make this dynamic
+	for gffFile,v in gffStats.iteritems():
+		curLetter = gff[gffFile]
 		curIndex = letterIndex.index(curLetter)
 		count, avg = v
 		windowsPerRegion = avg/windowSize
 		toRegion = count/float(windowsNC+regionCounts)
-		matrix[0][curIndex] = toRegion
+		transMatrix[NC][curIndex] = toRegion
 		if curLetter == "G":
 			stayProb = 1.0/windowsPerRegion
-			matrix[1][1] = stayProb
-			matrix[1][3] = gene2te
+			transMatrix[G][G] = stayProb
+			transMatrix[G][TE] = gene2te
 			leaveProb = 1-(gene2te+stayProb)
-			matrix[1][0] = leaveProb
+			transMatrix[G][NC] = leaveProb
 		elif curLetter == "TE":
 			stayProb = 1.0/windowsPerRegion
-			matrix[3][3] = stayProb
-			matrix[3][1] = te2gene
+			transMatrix[TE][TE] = stayProb
+			transMatrix[TE][G] = te2gene
 			leaveProb = 1-(te2gene+stayProb)
-			matrix[3][0] = leaveProb
+			transMatrix[TE][NC] = leaveProb
 		else:
 			stayProb = 1.0/windowsPerRegion
 			leaveProb = (1.0-stayProb)
-			matrix[curIndex][0] = leaveProb
-			matrix[curIndex][curIndex] = stayProb
-	print map(sum, matrix)
+			transMatrix[curIndex][NC] = leaveProb
+			transMatrix[curIndex][curIndex] = stayProb
+	print map(sum, transMatrix)
 	print "\t"+'\t'.join(letterIndex)
 	for i in range(len(letterIndex)):
-		print letterIndex[i]+'\t'+'\t'.join(map(lambda x: str(round(x,2)), matrix[i]))
-	print matrix
+		print letterIndex[i]+'\t'+'\t'.join(map(lambda x: str(round(x,2)), transMatrix[i]))
+	return transMatrix
 		
 def checkFiles(fileList):
 	if not fileList: return 0
