@@ -10,9 +10,6 @@ import matplotlib.pyplot as plt
 from pymethyl import MethIndex
 import cPickle
 
-#H Dictionaries
-hD = {'A':'H', 'T':'H', 'C':'H', 'G':'G', 'N':'N', 'R':'N', 'Y':'N', 'K':'N', 'M':'N', 'S':'N', 'W':'N', 'B':'N', 'D':'N', 'H':'N', 'V':'N', 'X':'N'}
-compDict = {'A':'T', 'T':'A', 'C':'G', 'G':'C', 'N':'N', 'R':'N', 'Y':'N', 'K':'N', 'M':'N', 'S':'N', 'W':'N', 'B':'N', 'D':'N', 'H':'N', 'V':'N', 'X':'N'}
 motifIndex = {'+':{'CG':1,'CHG':2,'CHH':3}, '-':{'CG':4,'CHG':5,'CHH':6}}
 methTypes = ('CG','CHG','CHH')
 
@@ -72,7 +69,7 @@ class methExperiment:
 							self.dataDict[sampleName][gffFile][methType].append(methylBins[i])
 				print "%s: %i" % (gffFile,count)
 
-	def plotData(self):
+	def plotData(self,outputType='eps'):
 		for sampleName in self.samples:
 			fig = plt.figure(figsize=(11,7))
 			count = 1
@@ -87,8 +84,7 @@ class methExperiment:
 			plt.xticks(range(len(names)+1)[1:],names)
 			plt.subplots_adjust(hspace=0.1, top=0.95, bottom=0.05, left=0.07, right=0.96)
 			plt.suptitle("Methylation Probabilities by Region")
-			plt.savefig(sampleName+"_probabilities.eps")
-			plt.savefig(sampleName+"_probabilities.svg")
+			plt.savefig(sampleName+"_probabilities."+outputType)
 
 	def printProbs(self):
 		for sampleName in self.samples:
@@ -256,12 +252,15 @@ def makeBoxplot(sp, dataList, methType, names, fig):
 if __name__ == "__main__":
 	main()
 
-def regionFinder(E,TP,fa,chromLens,states):
+def regionFinder(E,TP,fa,chromLens,states): #get this integrated
 	#TP[from][to]
 	# Emissions ##############
 	#[ 0.   0.1  0.2  0.3  0.4  0.5  0.6  0.7  0.8  0.9  1. ]
 	#[0 1)
 	#("NC","G","TG","TE","PG")
+
+	#get emission probabilities parsed like this
+	#pass in state name order
 	E = ((([816, 46, 34, 18, 15, 10, 13, 11, 40, 15], 1018),\
 	([964, 54, 7, 2, 0, 0, 0, 0, 0, 0], 1027),\
 	([871, 41, 40, 35, 19, 6, 3, 1, 0, 1], 1017)),\
@@ -390,13 +389,13 @@ def viterbi(TP, EP, methSeq, states, fastaFile, chrom):
 	maxProb = np.amax(probMat[:,-1])
 	maxIndex = probMat[:,-1].argmax()
 	path = [maxIndex]
-	for i in xrange(len(methSeq)-1,0,-1):
+	for i in xrange(len(methSeq)-1,0,-1): # backtrace path
 		path.append(pathMat[path[-1],i])
 	#print "plog: %.3f" % (maxProb)
 	path = path[::-1]
 	return path
 
-def calcEmission(stateEP, data):
+def calcEmission(stateEP, data): #do something with this
 	#CG, CHH, CHG
 	total = 0.0
 	for i in xrange(len(data)):
@@ -419,38 +418,11 @@ def parseChrom(fastaFile, experiment, chrom, start, chromLens):
 		start = starts[index]	#1-indexed
 		end = start+windowSize-1
 		methFreqs = tuple(getFreqs(FA, experiment, chrom, start, end))
-		#print chrom, start, end, methFreqs
 		methSeq[index] = methFreqs[:]
 	return (starts, methSeq)
 
-def geneBin(geneStruct, FA, methReps):
-	gChr, gStrand, gStart, gEnd, gID = geneStruct
-	geneLen = gEnd-gStart+1
-	Y = np.zeros((3,geneLen))			#methyl values
-	C = np.zeros((3,geneLen))			#count values
-	for rep in methReps:
-		methA, contA = rep.fetch(chrom=gChr,start=gStart,end=gEnd)
-		methNA = np.array(methA)
-		contNA = np.array(contA) #make np for slicing
-		rNot1 = methNA != -1
-		for methIndex in range(1,len(methTypes)+1): #1-indexed
-			for i in range(0,4,3): #handle both strands
-				methUse = contNA == methIndex+i
-				locUse = np.logical_and(rNot1, methUse)
-				C[methIndex-1, locUse] += 1
-				Y[methIndex-1, locUse] += methNA[locUse]
-	outBins = []
-	for i in range(3):
-		cgt1 = C[i,:] > 1
-		Y[i,cgt1] = Y[i,cgt1]/C[i,cgt1] #average across replicates
-		outBins.append(meanFunc(Y[i,:],C[i,:]))
-	return outBins #(CG, CHG, CHH)
-
 def getFreqs(FA, experiment, chrom, start, end):
-	if sum(methPoints) == 0:
-		return [np.nan, np.nan, np.nan]
 	output = []
-	
 	Y = np.zeros(3,end-start+1)	
 	C = np.zeros(3,end-start+1, dtype=int)
 	for methReplicate in experiment:
@@ -466,6 +438,7 @@ def getFreqs(FA, experiment, chrom, start, end):
 			output.append(np.nan)
 		else:
 			output.append(np.mean(Y[methIndex,C[methIndex,C[methIndex] > 0]]))
+	return output
 	
 def parseEP(E):
 	#E[state][meth][count][index]
