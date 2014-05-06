@@ -261,33 +261,17 @@ def regionFinder(E,TP,fa,chromLens,states): #get this integrated
 
 	#get emission probabilities parsed like this
 	#pass in state name order
-	E = ((([816, 46, 34, 18, 15, 10, 13, 11, 40, 15], 1018),\
-	([964, 54, 7, 2, 0, 0, 0, 0, 0, 0], 1027),\
-	([871, 41, 40, 35, 19, 6, 3, 1, 0, 1], 1017)),\
-	(([14216, 2925, 2337, 1801, 1252, 688, 318, 134, 217, 331], 24219),\
-	([23995, 219, 53, 6, 0, 0, 0, 0, 0, 0], 24273),\
-	([23418, 148, 128, 158, 168, 119, 60, 30, 1, 1], 24231)),\
-	(([141, 24, 17, 13, 11, 14, 28, 48, 1170, 1725], 3191),\
-	([1707, 1370, 117, 6, 1, 0, 0, 0, 0, 0], 3201),\
-	([216, 42, 134, 415, 869, 994, 435, 74, 5, 1], 3185)),\
-	(([920, 72, 89, 63, 80, 143, 145, 279, 2161, 3078], 7030),\
-	([4061, 2386, 616, 292, 175, 89, 39, 18, 6, 4], 7686),\
-	([1445, 309, 492, 826, 1264, 1417, 721, 231, 119, 77], 6901)),\
-	(([235, 25, 17, 21, 7, 6, 10, 15, 53, 75], 464),\
-	([424, 38, 5, 1, 0, 0, 0, 0, 0, 0], 468),\
-	([299, 16, 28, 36, 36, 25, 14, 3, 3, 0], 460)))
+	#E[state][meth][count][index]
 
 	EP = parseEP(E) #EP[state][meth][bin]
 
-	for samNum in ("109","69"):
-		experiment = []
-		rep1 = "30-"+samNum+"_1_methratio.txt"
-		rep2 = "30-"+samNum+"_2_methratio.txt"
-		experiment.append(MethIndex(rep1,fastaFile))
-		experiment.append(MethIndex(rep2,fastaFile))
-		useVoting(chromLens, experiment, fastaFile, TP, EP, "Chr1", states, 50)
-		sys.stderr.write("Starting sample "+samNum+"\n")
-		#window(chromLens, experiment, fastaFile, TP, EP, "Chr1", states)
+	for sampleName in self.samples:
+		methIndexes = []
+		for mf in self.samples[sampleName]:
+			methIndexes.append(MethIndex(mf,fa))
+			useVoting(chromLens, experiment, fastaFile, TP, EP, "Chr1", states, 50)
+			sys.stderr.write("Starting sample "+samNum+"\n")
+			#window(chromLens, experiment, fastaFile, TP, EP, "Chr1", states)
 
 def window(chromLens, experiment, fastaFile, TP, EP, chrom, states):
 	starts, methSeq = parseChrom(fastaFile, experiment, chrom, 1, chromLens)
@@ -296,7 +280,6 @@ def window(chromLens, experiment, fastaFile, TP, EP, chrom, states):
 
 def useVoting(chromLens, experiment, fastaFile, TP, EP, chrom, states, slideSize):
 	voteArray = makeVoteArray(chromLens["Chr1"])
-	print "Made vote array"
 	for start in xrange(1,windowSize,slideSize):
 		starts, methSeq = parseChrom(fastaFile, experiment, "Chr1", start, chromLens)
 		statePath = viterbi(TP, EP, methSeq, states, fastaFile, "Chr1")
@@ -324,8 +307,7 @@ def printFeatures(maxVotes, targetIndex, states):
 		else:
 			if end != 0:
 				features.append((start,end))
-				start = 0
-				end = 0
+				start,end = 0,0
 	for i in features:
 		print "Chr1\t%s\t%d\t%d" % (states[targetIndex], i[0], i[1])
 
@@ -417,7 +399,7 @@ def parseChrom(fastaFile, experiment, chrom, start, chromLens):
 	for index in xrange(len(starts)):
 		start = starts[index]	#1-indexed
 		end = start+windowSize-1
-		methFreqs = tuple(getFreqs(FA, experiment, chrom, start, end))
+		methFreqs = getFreqs(FA, experiment, chrom, start, end)
 		methSeq[index] = methFreqs[:]
 	return (starts, methSeq)
 
@@ -438,7 +420,7 @@ def getFreqs(FA, experiment, chrom, start, end):
 			output.append(np.nan)
 		else:
 			output.append(np.mean(Y[methIndex,C[methIndex,C[methIndex] > 0]]))
-	return output
+	return tuple(output)
 	
 def parseEP(E):
 	#E[state][meth][count][index]
