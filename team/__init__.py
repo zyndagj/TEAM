@@ -39,7 +39,7 @@ class methExperiment:
 		if not checkFiles([fa]):
 			self.fa = fa
 			self.FA = pysam.Fastafile(self.fa)
-	def printExperiment(self):
+	def printExperiment(self): # prints the experiment layout
 		print "\nGFF File: %s\nReference File: %s\n" %(self.gff,self.fa)
 		for sample in self.samples:
 			print "%s:" % (sample)
@@ -47,9 +47,8 @@ class methExperiment:
 			for i in range(numReps-1):
 				print "  |- %s" % (self.samples[sample][i])
 			print "   - %s" % (self.samples[sample][numReps-1])
-	def makeMethBins(self):
+	def makeMethBins(self, minRegionLen = 700): # creates a dictinary of methylation frequencies per feature
 		self.dataDict = {}
-		minRegionLen = 700
 		for sampleName in self.samples:
 			self.dataDict[sampleName] = {}
 			methIndexes = []
@@ -68,12 +67,11 @@ class methExperiment:
 						if np.isfinite(methylBins[i]):
 							self.dataDict[sampleName][gffFile][methType].append(methylBins[i])
 				print "%s: %i" % (gffFile,count)
-
-	def plotData(self,outputType='eps'):
+	def plotMethBins(self,outputType='eps'): # prints the frequencies by type from makeMethBins as boxplots
 		for sampleName in self.samples:
 			fig = plt.figure(figsize=(11,7))
 			count = 1
-			for methType in ("CG","CHH","CHG"):
+			for methType in methTypes:
 				dataList = []
 				names = []
 				for gff in self.gff:
@@ -85,8 +83,8 @@ class methExperiment:
 			plt.subplots_adjust(hspace=0.1, top=0.95, bottom=0.05, left=0.07, right=0.96)
 			plt.suptitle("Methylation Probabilities by Region")
 			plt.savefig(sampleName+"_probabilities."+outputType)
-
-	def printProbs(self):
+	def makeEmissions(self): # generate emission probabilies from makeMethBins
+		print "Emission Probabilities"
 		for sampleName in self.samples:
 			self.probs[sampleName] = {}
 			for gff in self.gff:
@@ -94,31 +92,28 @@ class methExperiment:
 				print gff
 				for methType in methTypes:
 					Data = self.dataDict[sampleName][gff][methType]
-					# edges are half open [0, 1)
-					hist, edges = np.histogram(Data, bins=10, range=(0,1))
+					hist, edges = np.histogram(Data, bins=10, range=(0,1)) # edges are half open [0, 1)
 					self.probs[sampleName][gff][methType] = hist
 					string = "%s:\t" % (methType)
 					for i in hist:
 						string += "%d\t" % (i)
-					string += "sum: %d" % (sum(hist))
-					print string
+					print string + "sum: %d" % (sum(hist))
 			print edges
-
-	def writeProbs(self):
+	def writeEmissions(self):
 		for sampleName in self.samples:
 			cPickle.dump(self.probs, open(sampleName+"_probs.pickle",'wb'))
-	def readProbs(self):
+	def readEmissions(self):
 		# loads self.probs[sampleName][gff][methType] array of 10 hist values.
 		for sampleName in self.samples:
 			cPickle.load(open(sampleName+"_probs.pickle",'rb'))
-	def makeGffStats(self):
+	def makeTransisions(self): # makes transition probabilities
 		gffStats = {}
 		for gffFile in self.gff:
 			if self.gff[gffFile] != "NC":
 				gffStats[gffFile] = simpleStats(gffFile)
 		self.transMatrix = simpleAnalyze(gffStats, self.gff, self.fa+'.fai', self.windowSize)
 
-def getChromSizes(inFai):
+def getChromSizes(inFai): # returns a dicationary of chromosome sizes
 	chromLens = {}
 	for line in open(inFai,'r'):
 		#Chr1	30427671	6	79	80
@@ -126,7 +121,7 @@ def getChromSizes(inFai):
 		chromLens[tmp[0]] = int(tmp[1])
 	return chromLens
 
-def simpleStats(inFile):
+def simpleStats(inFile): # returns the count and average size of a feature type
 	print inFile
 	count = 0
 	total = 0
@@ -141,13 +136,7 @@ def simpleStats(inFile):
 	print "\tAverage Size: %.1f" % (total/float(count))
 	return (count, total/float(count))
 
-def calcNC(genomeBases, gffStats, gff):
-	total = genomeBases
-	for gffFile in gff:
-			total -= gffStats[gffFile][0]*gffStats[gffFile][1]
-	return total
-
-def simpleAnalyze(gffStats, gff, inFai, windowSize):
+def simpleAnalyze(gffStats, gff, inFai, windowSize): #generate transition probabilities
 	chromDict = getChromSizes(inFai)
 	genomeBases = sum(chromDict.values())
 	#self.gff[gffFile] = name
@@ -187,7 +176,7 @@ def simpleAnalyze(gffStats, gff, inFai, windowSize):
 		print letterIndex[i]+'\t'+'\t'.join(map(lambda x: str(round(x,2)), transMatrix[i]))
 	return transMatrix
 		
-def checkFiles(fileList):
+def checkFiles(fileList): # check to see if any files in a list don't exist
 	if not fileList: return 0
 	ret = 0
 	for f in fileList:
@@ -219,12 +208,10 @@ def geneBin(geneStruct, FA, methReps):
 		outBins.append(meanFunc(Y[i,:],C[i,:]))
 	return outBins #(CG, CHG, CHH)
 
-def meanFunc(Y,C): #getting weird output values
+def meanFunc(Y,C): # returns the means of bins
 	gZero = Y[C > 0]
-	if len(gZero):
-		return np.mean(gZero)
-	else:
-		return np.nan
+	if len(gZero): return np.mean(gZero)
+	return np.nan
 
 def gff_gen(inFile, minSize):
 	#Chr1    TAIR10  transposable_element_gene       433031  433819  .       -       .       ID=AT1G02228;Note=transposable_element_gene;Name=AT1G02228;Derives_from=AT1TE01405
@@ -233,8 +220,7 @@ def gff_gen(inFile, minSize):
 		tmp = line.split('\t')
 		chrom = tmp[0]
 		strand = tmp[6]
-		start = int(tmp[3])
-		end = int(tmp[4])
+		start, end = map(int, tmp[3:4])
 		idNum = tmp[8].split(';')[0]
 		idNum = idNum.split('=')[1]
 		if end-start > minSize:
