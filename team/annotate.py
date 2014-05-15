@@ -1,9 +1,13 @@
 import numpy as np
 from team import getChromSizes
 from team import methTypes
+from pymethyl import MethIndex 
 import sys
+import pysam
 
-def regionFinder(E,TP,fa,gff): #get this integrated
+windowSize = 500
+
+def regionFinder(E,TP,fa,gff,samples): #get this integrated
 	states = gff.values()
 	chromSizes = getChromSizes(fa+'.fai')
 	#TP[from][to]
@@ -12,26 +16,15 @@ def regionFinder(E,TP,fa,gff): #get this integrated
 	#[0 1)
 	#("NC","G","TG","TE","PG")
 
-	#get emission probabilities parsed like this
-	#pass in state name order
-	#E[state][meth][count][index]
-
-	print E
-	print TP
-	print chromSizes
-	print states
-
 	EP = parseEP(E,gff) #EP[sample][state][meth][index]
-	print EP
-	sys.exit()
 
-	for sampleName in self.samples:
-		methIndexes = []
-		for mf in self.samples[sampleName]:
-			methIndexes.append(MethIndex(mf,fa))
-			useVoting(chromLens, experiment, fastaFile, TP, EP, "Chr1", states, 50)
-			sys.stderr.write("Starting sample "+samNum+"\n")
-			#window(chromLens, experiment, fastaFile, TP, EP, "Chr1", states)
+	for sampleName in samples:
+		methFiles = []
+		for mf in samples[sampleName]:
+			methFiles.append(MethIndex(mf,fa))
+		sys.stderr.write("Starting sample "+sampleName+"\n")
+		useVoting(chromSizes, methFiles, fa, TP, EP[sampleName], "Chr1", states, 50)
+		#window(chromLens, methFiles, fastaFile, TP, EP, "Chr1", states)
 
 def window(chromLens, experiment, fastaFile, TP, EP, chrom, states):
 	starts, methSeq = parseChrom(fastaFile, experiment, chrom, 1, chromLens)
@@ -94,15 +87,18 @@ def makeVoteArray(size):
 	return np.zeros((size,5), dtype=int)
 
 def printPath(starts, statePath, states, chromLens, chrom):
+	teIndex = states.index("TE")
 	for i in xrange(len(statePath)):
-		if statePath[i] == 3:
+		if statePath[i] == teIndex:
 			start = starts[i]
 			end = start+windowSize-1
 			print "%s\t%d\t%d" % (chrom, start, end)
 
 def viterbi(TP, EP, methSeq, states, fastaFile, chrom):
+	stateNC = states.index("NC")
 	#TP[from][to]
-	startProb = [0.0, -np.inf, -np.inf, -np.inf, -np.inf]
+	startProb = [-np.inf, -np.inf, -np.inf, -np.inf, -np.inf]
+	startProb[stateNC] = 1.0
 	TP = np.log2(TP)
 	numStates = len(states)
 	#print states
@@ -112,7 +108,7 @@ def viterbi(TP, EP, methSeq, states, fastaFile, chrom):
 	for i in xrange(numStates):
 		probMat[i,0] = startProb[i]+calcEmission(EP[i], methSeq[0])
 	for i in xrange(1,len(methSeq)):
-		if sum(np.isnan(methSeq[i])) == 3:
+		if sum(np.isnan(methSeq[i])) == 3: # no methylation. stay in current state
 				pMax = np.amax(probMat[:,i-1])
 				pMaxIndex = probMat[:,i-1].argmax()
 				for x in xrange(numStates):
@@ -165,8 +161,8 @@ def parseChrom(fastaFile, experiment, chrom, start, chromLens):
 
 def getFreqs(FA, experiment, chrom, start, end):
 	output = []
-	Y = np.zeros(3,end-start+1)	
-	C = np.zeros(3,end-start+1, dtype=int)
+	Y = np.zeros((3,end-start+1)	)
+	C = np.zeros((3,end-start+1), dtype=int)
 	for methReplicate in experiment:
 		methA, contA = methReplicate.fetch(chrom=chrom, start=start, end=end)
 		methNA = np.array(methA)
