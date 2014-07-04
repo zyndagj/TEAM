@@ -26,30 +26,42 @@ python setup.py install --user
 Example
 -------------
 
+First, TEAM needs to be trained on a set of data. This is done by calculating the model emissions and transitions from a `methExperiment` of methylation and feature files.
+
+### Making methExperiment
+
 ```python
 from team import methExperiment
-import sys
+from team import annotate
 
 testExp = methExperiment()
 testExp.addSample("30-109",["30-109_1_methratio.txt","30-109_2_methratio.txt"])
-testExp.addGFF("NC","region_gffs/TAIR10_NC.gff")
-testExp.addGFF("TE genes","region_gffs/TAIR10_te_gene.gff")
-testExp.addGFF("Genes","region_gffs/TAIR10_genes.gff")
-testExp.addGFF("Pseudogenes","region_gffs/TAIR10_pseudogene.gff")
-testExp.addGFF("TEs","region_gffs/TAIR10_te.gff")
+testExp.addGFF("NC","region_gffs/TAIR10_NC.gff") #non-coding regions
+testExp.addGFF("TG","region_gffs/TAIR10_te_gene.gff") #TE-genes
+testExp.addGFF("G","region_gffs/TAIR10_genes.gff") #genes
+testExp.addGFF("PG","region_gffs/TAIR10_pseudogene.gff") #pseudogenes
+testExp.addGFF("TE","region_gffs/TAIR10_te.gff") #TEs
 testExp.setReference("TAIR10.fa")
 testExp.printExperiment()
-##############################
-# Make emission probabilities
-##############################
-testExp.makeMethBins()
-testExp.printProbs()
-testExp.plotData()
-testExp.writeProbs()
-##############################
-# Load emission probabilities
-##############################
-#testExp.readProbs()
-sys.exit()
 ```
+### Training Model
+
+```python
+testExp.makeMethBins()
+testExp.makeEmissions()
+#testExp.readEmissions() #read previously generated emissions
+testExp.printEmissions()
+testExp.makeTransitions()
+```
+
+Lastly, TEs can be discovered in new data using the generated model.
+
+### Annotate Data
+
+```python
+testExp = methExperiment()
+testExp.addSample("30-29",["30-29_1_methratio.txt","30-29_2_methratio.txt","30-29_3_methratio.txt"])
+annotate.regionFinder(trainExp.emissions,trainExp.transMatrix,trainExp.fa,trainExp.gff,testExp.samples, 500, 50)
+```
+
 A more detailed example with test data will be released soon.

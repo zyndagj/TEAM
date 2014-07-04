@@ -58,7 +58,7 @@ class MethIndex:
 		if end < start and end != -1:
 			print 'Bad coordinates'
 			return []
-		if start == -1:
+		if start == -1 or start == 0:
 			seekStart = self.seekDict[chrom]
 			if end == -1:
 				countEnd = self.chromDict[chrom]

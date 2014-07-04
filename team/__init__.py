@@ -40,14 +40,21 @@ class methExperiment:
 			self.fa = fa
 			self.FA = pysam.Fastafile(self.fa)
 	def printExperiment(self): # prints the experiment layout
-		print "\nGFF File: %s\nReference File: %s\n" %(self.gff,self.fa)
+		print "\nGFF Files:"
+		for i in range(len(self.gff)-1):
+			k = self.gff.keys()[i]
+			print "  |-  [ %s ]\t %s" % (self.gff[k], k)
+		k = self.gff.keys()[-1]
+		print "   -  [ %s ]\t %s" % (self.gff[k], k)
+		print "\nReference: %s\n" % (self.fa)
 		for sample in self.samples:
 			print "%s:" % (sample)
 			numReps = len(self.samples[sample])
 			for i in range(numReps-1):
 				print "  |- %s" % (self.samples[sample][i])
-			print "   - %s" % (self.samples[sample][numReps-1])
+			print "   - %s\n" % (self.samples[sample][numReps-1])
 	def makeMethBins(self, minRegionLen = 700): # creates a dictinary of methylation frequencies per feature
+		print "Making methylation bins"
 		self.dataDict = {}
 		for sampleName in self.samples:
 			self.dataDict[sampleName] = {}
@@ -84,7 +91,6 @@ class methExperiment:
 			plt.suptitle("Methylation Probabilities by Region")
 			plt.savefig(sampleName+"_probabilities."+outputType)
 	def makeEmissions(self): # generate emission probabilies from makeMethBins
-		print "Emission Probabilities"
 		for sampleName in self.samples:
 			self.emissions[sampleName] = {}
 			for gff in self.gff:
@@ -94,11 +100,6 @@ class methExperiment:
 					Data = self.dataDict[sampleName][gff][methType]
 					hist, edges = np.histogram(Data, bins=10, range=(0,1)) # edges are half open [0, 1)
 					self.emissions[sampleName][gff][methType] = hist
-					string = "%s:\t" % (methType)
-					for i in hist:
-						string += "%d\t" % (i)
-					print string + "sum: %d" % (sum(hist))
-			print edges
 		cPickle.dump(self.emissions, open("emissions.pickle",'wb'))
 	def readEmissions(self):
 		if not checkFiles(['emissions.pickle']):
@@ -107,6 +108,7 @@ class methExperiment:
 		else:
 			print "Make emissions first"
 	def printEmissions(self):
+		print "\nEmission Probabilities"
 		for sampleName in self.samples:
 			for gff in self.gff:
 				print gff
@@ -116,8 +118,10 @@ class methExperiment:
 					for i in hist:
 						string += "%d\t" % (i)
 					print string + "sum: %d" % (sum(hist))
+		print "[0\t"+")\t".join(map(str,np.arange(0.1,1.1,0.1)))+']'
 	def makeTransitions(self): # makes transition probabilities
 		gffStats = {}
+		print "\nGFF Stats:"
 		for gffFile in self.gff:
 			if self.gff[gffFile] != "NC":
 				gffStats[gffFile] = simpleStats(gffFile)
@@ -179,10 +183,10 @@ def makeTransMatrix(gffStats, gff, inFai, windowSize): #generate transition prob
 			leaveProb = (1.0-stayProb)
 		transMatrix[curIndex][NC] = leaveProb
 		transMatrix[curIndex][curIndex] = stayProb
-	print map(sum, transMatrix)
-	print "\t"+'\t'.join(letterIndex)
+	print "\nTransition Matrix"
+	print "\t"+'\t'.join(letterIndex)+'\tSum'
 	for i in range(len(letterIndex)):
-		print letterIndex[i]+'\t'+'\t'.join(map(lambda x: str(round(x,2)), transMatrix[i]))
+		print letterIndex[i]+'\t'+'\t'.join(map(lambda x: str(round(x,2)), transMatrix[i]))+'\t'+str(round(sum(transMatrix[i]),2))
 	return transMatrix
 		
 def checkFiles(fileList): # check to see if any files in a list don't exist
@@ -210,6 +214,13 @@ def geneBin(geneStruct, FA, methReps):
 				locUse = np.logical_and(rNot1, methUse)
 				C[methIndex-1, locUse] += 1
 				Y[methIndex-1, locUse] += methNA[locUse]
+			#if gStrand == '+':
+			#	methUse = contNA == methIndex+3
+			#else:
+			#	methUse = contNA == methIndex
+			#locUse = np.logical_and(rNot1, methUse)
+			#C[methIndex-1, locUse] += 1
+			#Y[methIndex-1, locUse] += methNA[locUse]
 	outBins = []
 	for i in range(3):
 		cgt1 = C[i,:] > 1

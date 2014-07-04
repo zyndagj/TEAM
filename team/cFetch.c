@@ -22,9 +22,13 @@ void fetch(char* fileName, int seekStart, int blocks,
 	fclose(f);
 	int i;
 	double tmp;
+	//PyObject *tmpObject;
 	for(i=0; i<blocks; i++) {
 		// Check for no coverage
 		if(structArray[i].c == (unsigned short) 65535 && structArray[i].ct == (unsigned short) 65535) {
+			//*tmpObject = Py_BuildValue("d", -1.0);
+			//PyList_SetItem(outMeth, (Py_ssize_t) i, tmpObject);
+			//Py_DECREF(tmpObject);
 			PyList_SetItem(outMeth, (Py_ssize_t) i, Py_BuildValue("d", -1.0));
 		// Check for not enough coverage
 		} else if(structArray[i].ct < minCov) {
@@ -55,7 +59,10 @@ static PyObject* cFetch(PyObject* self, PyObject* args) {
 	PyObject* outMeth = PyList_New((Py_ssize_t) blocks);
 	PyObject* outContext = PyList_New((Py_ssize_t) blocks);
 	fetch(fileName, seekStart, blocks, minCov, maxCov, outMeth, outContext);
-	return Py_BuildValue("(OO)", outMeth, outContext);
+	PyObject *reVal = Py_BuildValue("(OO)", outMeth, outContext);
+	Py_DECREF(outMeth);
+	Py_DECREF(outContext);
+	return reVal;
 }
 
 static PyMethodDef FetchMethods[] = {
