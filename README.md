@@ -28,7 +28,7 @@ Example
 
 First, TEAM needs to be trained on a set of data. This is done by calculating the model emissions and transitions from a `methExperiment` of methylation and feature files.
 
-### Making methExperiment
+#### Making methExperiment
 
 ```python
 from team import methExperiment
@@ -44,7 +44,7 @@ testExp.addGFF("TE","region_gffs/TAIR10_te.gff") #TEs
 testExp.setReference("TAIR10.fa")
 testExp.printExperiment()
 ```
-### Training Model
+#### Training Model
 
 ```python
 testExp.makeMethBins()
@@ -56,7 +56,7 @@ testExp.makeTransitions()
 
 Lastly, TEs can be discovered in new data using the generated model.
 
-### Annotate Data
+#### Annotate Data
 
 ```python
 testExp = methExperiment()
